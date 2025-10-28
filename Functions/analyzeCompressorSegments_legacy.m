@@ -1,10 +1,20 @@
-function results = analyzeCompressorSegments(t_day, x_day_interp, compressor_day, usableDataIndex, varargin)
+function results = analyzeCompressorSegments_legacy(t, x, compressor, usableDataIndex, varargin)
 % analyzeCompressorSegments
 %   Performs peak/valley analysis, compressor ON/OFF mask prediction,
 %   and comparison against measured compressor data for multiple segments.
 %
-%   results = analyzeCompressorSegments(t_day, x_day_interp, compressor_day, usableDataIndex)
-%
+%   results = analyzeCompressorSegments(t, x, compressor, usableDataIndex)
+%   x-Temperature in the fridge in time
+
+%   t-Time vactor
+
+%   compressor-Recorded compressor states to be compared with predicted
+%   states
+
+%   usableDataIndex-Index of values to be used in prediction after anomaly
+%   exclusion
+
+
 % Optional Name-Value arguments:
 %   'MinPeakProminence' — prominence threshold for findpeaks (default 0.8)
 %   'MinPeakDistance'   — minimum distance between peaks (default 0.17)
@@ -36,9 +46,9 @@ for i = 1:nSets
     N = numel(idx);
 
     % Extract current chunk
-    t_chunk = t_day(idx);
-    x_chunk = x_day_interp(idx);
-    compressor_chunk = compressor_day(idx);
+    t_chunk = t(idx);
+    x_chunk = x(idx);
+    compressor_chunk = compressor(idx);
 
     % --- 1) Find peaks and valleys ---
     [pks, locs_peaks, valleys, locs_valleys] = ...
