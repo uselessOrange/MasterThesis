@@ -1,14 +1,20 @@
-function results = analyzeCompressorMaskFromGrayBox(t, x_mask, compressor, usableDataIndex, varargin)
-% analyzeCompressorMaskSegments
-%   Performs ON/OFF mask comparison between a predicted compressor mask (x_mask)
-%   and the measured compressor signal for multiple segments.
+function results = analyzeCompressorMaskFromGrayBox(compare_container, varargin)
+% analyzeCompressorMaskFromGrayBox
+%   Compares a predicted compressor mask (x_mask) against the measured
+%   compressor signal for multiple segments without performing peak/valley
+%   detection. This function directly uses the provided ON/OFF mask for
+%   analysis and outputs relevant statistics for each segment.
 %
-%   This function is similar to analyzeCompressorSegments, except that the
-%   compressor ON/OFF mask is provided directly (x_mask), so no peak/valley
-%   detection is performed.
+%   Inputs:
+%       compare_container - Struct containing predicted and measured masks.
+%       varargin - Optional parameters (e.g., 'PlotResults', true/false).
+%
+%   Outputs:
+%       results - Struct array containing the predicted mask, measured mask,
+%                 statistics.
 %
 % Example:
-%   results = analyzeCompressorMaskSegments(t, predMask, compressor, usableIndex, ...
+%   results = analyzeCompressorMaskFromGrayBox(t, predMask, compressor, usableIndex, ...
 %                  'PlotResults', true);
 
   %% --- 1) Parse own parameters ---
@@ -18,20 +24,21 @@ function results = analyzeCompressorMaskFromGrayBox(t, x_mask, compressor, usabl
   params = p.Results;
 
   %% --- 2) Initialize output struct ---
-  nSets = numel(usableDataIndex);
+  nSets = numel(compare_container.mask_meas);
   results = repmat(struct( ...
      'mask_pred',[], 'mask_meas',[], 'stats',[], ...
-     't_chunk',[], 'mask_chunk',[], 'compressor_chunk',[] ), 1, nSets);
+     'mask_chunk',[], 'compressor_chunk',[] ), 1, nSets);
 
   %% --- 3) Loop over segments ---
   for i = 1:nSets
-    idx = usableDataIndex{i};
-    t_chunk          = t(idx);
-    mask_chunk       = x_mask(idx);
-    compressor_chunk = compressor(idx);
+    mask_chunk       = compare_container.mask_pred{i};
+    compressor_chunk = compare_container.mask_meas{i};
 
     % Ensure same length
     N = min(numel(mask_chunk), numel(compressor_chunk));
+    if numel(mask_chunk) ~= numel(compressor_chunk)
+        error('Error: The predicted mask and measured mask must be of the same length.');
+    end
     mask_pred = mask_chunk(1:N);
     mask_meas = compressor_chunk(1:N);
 
@@ -42,7 +49,6 @@ function results = analyzeCompressorMaskFromGrayBox(t, x_mask, compressor, usabl
     results(i).mask_pred        = mask_pred;
     results(i).mask_meas        = mask_meas;
     results(i).stats            = stats;
-    results(i).t_chunk          = t_chunk;
     results(i).mask_chunk       = mask_chunk;
     results(i).compressor_chunk = compressor_chunk;
 
@@ -50,7 +56,7 @@ function results = analyzeCompressorMaskFromGrayBox(t, x_mask, compressor, usabl
     if params.PlotResults
       figure('Name', sprintf('Compressor Mask Comparison Segment %d', i))
       plot(mask_pred, '-r','LineWidth',2); hold on
-      plot(mask_meas,  '-b');
+      plot(mask_meas,  '-b');hold off
       xlabel('Sample index'), ylabel('ON/OFF')
       legend('Predicted','Measured')
       title(sprintf('Segment %d: Compressor Mask Comparison', i))
