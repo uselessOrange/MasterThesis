@@ -1,4 +1,5 @@
 clear
+close all
 load data2.mat
 
 %% =======================
@@ -6,6 +7,8 @@ load data2.mat
 %% =======================
 nTrainRuns      = 5;   % how many independent training passes
 trainingSplits  = [1.0 0.8 0.5 0.3 0.2 0.1];
+
+ResultMatrix=nan(nTrainRuns,length(trainingSplits));
 
 %% =======================
 % DATA PREPROCESSING
@@ -151,11 +154,12 @@ for runs = 1:nTrainRuns
         bestParam = params{bestIdx};
 
         %% === TESTING (MAPE)
-        pctErr = [];
+
         if length(TestingData) < 1
             TestingData = usableDataIndex;
         end
-        for i = 1:length(TestingData)
+        pctErr = nan(1,length(TestingData));
+        parfor i = 1:length(TestingData)
             idx = TestingData{i};
             t_sim = T*(0:length(idx)-1);
 
@@ -165,7 +169,7 @@ for runs = 1:nTrainRuns
                 t_sim, X_filtered(3,idx(1))');
 
             stats = compareOnTime(simData.u1, -X(2,idx));
-            pctErr(end+1) = stats.pctError;
+            pctErr(i) = stats.pctError;
         end
 
         %% === STORE RESULTS
@@ -200,7 +204,19 @@ for runs = 1:nTrainRuns
             sprintf('  n=%d', nTrain(i)), ...
             'VerticalAlignment','bottom')
     end
+    ResultMatrix(runs,:)=MAPE;
+    disp(ResultMatrix);
+
 end
+
+AverageResult=mean(ResultMatrix,2);
+figure
+plot(trainingFrac*100, AverageResult, '-o', 'LineWidth', 2)
+grid on
+
+xlabel('Training data used [%]')
+ylabel('Mean Absolute Percentage Error (MAPE) [%]')
+title('Learning Curve: Training Set Size vs Prediction Error')
 %%
 function simData = fridge_fixed_stepCopy(Ta,G,R,c,t,x0)
 % Discrete-time simulation of a refrigerator with hysteresis control
