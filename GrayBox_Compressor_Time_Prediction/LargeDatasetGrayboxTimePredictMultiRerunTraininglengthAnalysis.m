@@ -8,8 +8,6 @@ load data2.mat
 nTrainRuns      = 5;   % how many independent training passes
 trainingSplits  = [1.0 0.8 0.5 0.3 0.2 0.1];
 
-ResultMatrix=nan(nTrainRuns,length(trainingSplits));
-
 %% =======================
 % DATA PREPROCESSING
 %% =======================
@@ -108,125 +106,146 @@ results=cell(1,nTrainRuns);
 %% =======================
 % REPAETE MULTIPLE TIMES DUE TO DATASET SELECTION RANDOMNESS
 %% =======================
-% for recheck=1:3
-for runs = 1:nTrainRuns
-    filename = sprintf('training_%d.mat', runs);
+    AverageResult=cell(1,5);
+
+for recheck=1:5
+    ResultMatrix=nan(nTrainRuns,length(trainingSplits));
+
+    for runs = 1:nTrainRuns
+        filename = sprintf('training_%d.mat', runs);
 
 
-    %% =======================
-    % EVALUATE TRAINING SPLITS
-    %% =======================
-    results = struct();
+        %% =======================
+        % EVALUATE TRAINING SPLITS
+        %% =======================
+        results = struct();
 
-    for s = 1:length(trainingSplits)
+        for s = 1:length(trainingSplits)
 
-        frac = trainingSplits(s);
-        nTrain = floor(frac * nChunks);
-        nTest  = nChunks - nTrain;
+            frac = trainingSplits(s);
+            nTrain = floor(frac * nChunks);
+            nTest  = nChunks - nTrain;
 
-        % Random permutation of chunk indices
-        permIdx = randperm(nChunks);
+            % Random permutation of chunk indices
+            permIdx = randperm(nChunks);
 
-        trainIdx = permIdx(1:nTrain);
-        testIdx  = permIdx(nTrain+1:end);
+            trainIdx = permIdx(1:nTrain);
+            testIdx  = permIdx(nTrain+1:end);
 
-        TrainingData = usableDataIndex(trainIdx);
-        TestingData  = usableDataIndex(testIdx);
+            TrainingData = usableDataIndex(trainIdx);
+            TestingData  = usableDataIndex(testIdx);
 
 
-        fprintf('\nTraining fraction %.0f%% (%d train / %d test)\n', ...
-            frac*100, nTrain, nTest);
+            fprintf('\nTraining fraction %.0f%% (%d train / %d test)\n', ...
+                frac*100, nTrain, nTest);
 
-        %% Load one training run (can average later if desired)
-        load(filename, 'params');
+            %% Load one training run (can average later if desired)
+            load(filename, 'params');
 
-        %% === PARAMETER SELECTION (TRAINING ONLY)
-        avgRMSE = nan(1,nTrain);
+            %% === PARAMETER SELECTION (TRAINING ONLY)
+            avgRMSE = nan(1,nTrain);
 
-        parfor j = 1:nTrain
-            rmse_tmp = nan(1,nTrain);
-            for i = 1:nTrain
-                idx = TrainingData{i};
-                t_sim = T*(0:length(idx)-1);
-                rmse_tmp(i) = costFunction( ...
-                    -X(2,idx)', X_filtered(1,idx)', ...
-                    params{j}(1), params{j}(2), params{j}(3), ...
-                    t_sim, X_filtered(3,idx(1)), X_filtered(3,idx));
+            parfor j = 1:nTrain
+                rmse_tmp = nan(1,nTrain);
+                for i = 1:nTrain
+                    idx = TrainingData{i};
+                    t_sim = T*(0:length(idx)-1);
+                    rmse_tmp(i) = costFunction( ...
+                        -X(2,idx)', X_filtered(1,idx)', ...
+                        params{j}(1), params{j}(2), params{j}(3), ...
+                        t_sim, X_filtered(3,idx(1)), X_filtered(3,idx));
+                end
+                avgRMSE(j) = mean(rmse_tmp);
             end
-            avgRMSE(j) = mean(rmse_tmp);
+
+            [~,bestIdx] = min(avgRMSE);
+            bestParam = params{bestIdx};
+
+            %% === TESTING (MAPE)
+
+            if length(TestingData) < 1
+                TestingData = usableDataIndex;
+            end
+            pctErr = nan(1,length(TestingData));
+            parfor i = 1:length(TestingData)
+                idx = TestingData{i};
+                t_sim = T*(0:length(idx)-1);
+
+                simData = fridge_fixed_stepCopy( ...
+                    X_filtered(1,idx)', ...
+                    bestParam(1), bestParam(2), bestParam(3), ...
+                    t_sim, X_filtered(3,idx(1))');
+
+                stats = compareOnTime(simData.u1, -X(2,idx));
+                pctErr(i) = stats.pctError;
+            end
+
+            %% === STORE RESULTS
+            results(s).trainingFraction = frac;
+            results(s).nTrainingChunks  = nTrain;
+            results(s).nTestingChunks   = nTest;
+            results(s).nTotalChunks     = nChunks;
+            results(s).MAPE             = mean(abs(pctErr));
+
+            fprintf('MAPE = %.3f %%\n', results(s).MAPE);
         end
 
-        [~,bestIdx] = min(avgRMSE);
-        bestParam = params{bestIdx};
+        %% =======================
+        % LEARNING CURVE PLOT
+        %% =======================
 
-        %% === TESTING (MAPE)
+        trainingFrac = [results.trainingFraction];
+        MAPE         = [results.MAPE];
+        nTrain       = [results.nTrainingChunks];
 
-        if length(TestingData) < 1
-            TestingData = usableDataIndex;
+        figure
+        plot(trainingFrac*100, MAPE, '-o', 'LineWidth', 2)
+        grid on
+
+        xlabel('Training data used [%]')
+        ylabel('Mean Absolute Percentage Error (MAPE) [%]')
+        title('Learning Curve: Training Set Size vs Prediction Error')
+
+        % Optional: annotate number of chunks
+        for i = 1:length(nTrain)
+            text(trainingFrac(i)*100, MAPE(i), ...
+                sprintf('  n=%d', nTrain(i)), ...
+                'VerticalAlignment','bottom')
         end
-        pctErr = nan(1,length(TestingData));
-        parfor i = 1:length(TestingData)
-            idx = TestingData{i};
-            t_sim = T*(0:length(idx)-1);
 
-            simData = fridge_fixed_stepCopy( ...
-                X_filtered(1,idx)', ...
-                bestParam(1), bestParam(2), bestParam(3), ...
-                t_sim, X_filtered(3,idx(1))');
+        ResultMatrix(runs,:)=MAPE;
+        disp(ResultMatrix);
 
-            stats = compareOnTime(simData.u1, -X(2,idx));
-            pctErr(i) = stats.pctError;
-        end
-
-        %% === STORE RESULTS
-        results(s).trainingFraction = frac;
-        results(s).nTrainingChunks  = nTrain;
-        results(s).nTestingChunks   = nTest;
-        results(s).nTotalChunks     = nChunks;
-        results(s).MAPE             = mean(abs(pctErr));
-
-        fprintf('MAPE = %.3f %%\n', results(s).MAPE);
     end
 
-    %% =======================
-    % LEARNING CURVE PLOT
-    %% =======================
-
-    trainingFrac = [results.trainingFraction];
-    MAPE         = [results.MAPE];
-    nTrain       = [results.nTrainingChunks];
-
+    AverageResult{recheck}=mean(ResultMatrix,1);
+    disp(AverageResult{recheck})
     figure
-    plot(trainingFrac*100, MAPE, '-o', 'LineWidth', 2)
+    plot(trainingSplits*100, AverageResult{recheck}, '-o', 'LineWidth', 2)
     grid on
 
     xlabel('Training data used [%]')
     ylabel('Mean Absolute Percentage Error (MAPE) [%]')
     title('Learning Curve: Training Set Size vs Prediction Error')
 
-    % Optional: annotate number of chunks
-    for i = 1:length(nTrain)
-        text(trainingFrac(i)*100, MAPE(i), ...
-            sprintf('  n=%d', nTrain(i)), ...
-            'VerticalAlignment','bottom')
-    end
-    ResultMatrix(runs,:)=MAPE;
-    disp(ResultMatrix);
-
 end
+% mean(AverageResult)
 
-AverageResult=mean(ResultMatrix,1);
-disp(AverageResult)
+% Convert cell array to a 10x6 numeric matrix (rows = cells)
+M = vertcat(AverageResult{:});
+
+% Compute the mean across the 10 rows to get a 1x6 averaged vector
+avgVec = mean(M,1);
+
+% Display result
+disp(avgVec);
 figure
-plot(trainingSplits*100, AverageResult, '-o', 'LineWidth', 2)
+plot(trainingSplits*100, avgVec, '-o', 'LineWidth', 2)
 grid on
 
 xlabel('Training data used [%]')
 ylabel('Mean Absolute Percentage Error (MAPE) [%]')
 title('Learning Curve: Training Set Size vs Prediction Error')
-
-% end
-
 %%
 function simData = fridge_fixed_stepCopy(Ta,G,R,c,t,x0)
 % Discrete-time simulation of a refrigerator with hysteresis control
