@@ -75,6 +75,9 @@ end
 
 nChunks = length(usableDataIndex);
 
+
+
+
 %% =======================
 % TRAIN MULTIPLE TIMES
 %% =======================
@@ -102,7 +105,10 @@ end
 results=cell(1,nTrainRuns);
 
 
-
+%% =======================
+% REPAETE MULTIPLE TIMES DUE TO DATASET SELECTION RANDOMNESS
+%% =======================
+% for recheck=1:3
 for runs = 1:nTrainRuns
     filename = sprintf('training_%d.mat', runs);
 
@@ -209,14 +215,18 @@ for runs = 1:nTrainRuns
 
 end
 
-AverageResult=mean(ResultMatrix,2);
+AverageResult=mean(ResultMatrix,1);
+disp(AverageResult)
 figure
-plot(trainingFrac*100, AverageResult, '-o', 'LineWidth', 2)
+plot(trainingSplits*100, AverageResult, '-o', 'LineWidth', 2)
 grid on
 
 xlabel('Training data used [%]')
 ylabel('Mean Absolute Percentage Error (MAPE) [%]')
 title('Learning Curve: Training Set Size vs Prediction Error')
+
+% end
+
 %%
 function simData = fridge_fixed_stepCopy(Ta,G,R,c,t,x0)
 % Discrete-time simulation of a refrigerator with hysteresis control
