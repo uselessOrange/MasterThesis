@@ -5,6 +5,12 @@ if nargin < 7, ub = [];
     end
 end
 
+% force x, Ta, t, y to be row vectors
+x = reshape(x,1,[]);
+Ta = reshape(Ta,1,[]);
+t = reshape(t,1,[]);
+y = reshape(y,1,[]);
+
 params = ga(@LocalcostFunc,3,[],[],[],[],lb,ub);
 y1=ModelFunction(-x',Ta',params(1),params(2),params(3),t,x0);
 
