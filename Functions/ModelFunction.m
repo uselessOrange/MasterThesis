@@ -3,6 +3,12 @@ function y = ModelFunction(x,Ta,G,R,C,t,x0)
 % x and Ta are vectors of the same lenght
 % R - frige walls thermal resistance
 % C - Heat capacity of the fridge content
+
+% Force inputs to be column vectors
+x  = x(:);
+Ta = Ta(:);
+t  = t(:);
+
 A=-1/(R*C);
 B=[G/C,1/(R*C)];
 C=1;
