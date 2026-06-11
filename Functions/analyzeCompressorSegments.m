@@ -96,7 +96,7 @@ function results = analyzeCompressorSegments(t, x, compressor, usableDataIndex, 
       plot(t_chunk/3600, x_chunk, 'b-'); hold on
       plot(t_chunk(locs_peaks)/3600, pks,      'ro','MarkerFaceColor','r');
       plot(t_chunk(locs_valleys)/3600, valleys,'go','MarkerFaceColor','g');
-      xlabel('Time (h)'), ylabel('Amplitude')
+      xlabel('Time (h)'), ylabel('Temperature [C]')
       title(sprintf('Segment %d: Detected Peaks & Valleys', i))
       grid on, hold off
 
